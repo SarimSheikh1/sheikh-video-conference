@@ -1,0 +1,10 @@
+const router=require('express').Router(); const db=require('../config/database'); const {requireAuth}=require('../middleware/authMiddleware');
+const multer=require('multer'),path=require('path'),fs=require('fs'),crypto=require('crypto');
+const avatarDir=path.join(__dirname,'..','uploads','avatars');fs.mkdirSync(avatarDir,{recursive:true});
+const avatarUpload=multer({storage:multer.diskStorage({destination:avatarDir,filename:(req,file,cb)=>cb(null,`${crypto.randomUUID()}${file.mimetype==='image/png'?'.png':'.jpg'}`)}),limits:{fileSize:5*1024*1024},fileFilter:(req,file,cb)=>{const ok=['image/jpeg','image/png'].includes(file.mimetype);cb(ok?null:Object.assign(new Error('Choose a JPG or PNG image.'),{status:400}),ok)}});
+router.use(requireAuth);
+router.get('/me',(req,res)=>res.json({user:req.user}));
+router.get('/',(req,res)=>{const q=`%${(req.query.q||'').trim()}%`;const users=db.prepare('SELECT id,name,username,email,profile_image,bio,status FROM users WHERE id != ? AND (name LIKE ? OR username LIKE ? OR email LIKE ?) LIMIT 50').all(req.user.id,q,q,q);res.json({users})});
+router.put('/me',(req,res)=>{const {name,bio,status}=req.body;db.prepare('UPDATE users SET name=COALESCE(?,name),bio=COALESCE(?,bio),status=COALESCE(?,status) WHERE id=?').run(name,bio,status,req.user.id);res.json({user:db.prepare('SELECT id,name,username,email,profile_image,bio,status FROM users WHERE id=?').get(req.user.id)})});
+router.post('/me/avatar',(req,res,next)=>avatarUpload.single('avatar')(req,res,err=>{if(err)return next(err);if(!req.file)return res.status(400).json({error:'Choose a profile photo.'});const imagePath=`/uploads/avatars/${req.file.filename}`;db.prepare('UPDATE users SET profile_image=? WHERE id=?').run(imagePath,req.user.id);res.json({user:db.prepare('SELECT id,name,username,email,profile_image,bio,status FROM users WHERE id=?').get(req.user.id)});}));
+module.exports=router;
