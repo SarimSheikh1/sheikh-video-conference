@@ -1,6 +1,7 @@
 /* Sheikh client: UI state, Socket.IO signaling, and real browser WebRTC media. */
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 let me, socket, iceServers=[], localStream, peers=new Map(), activeCall=null, selectedCaller=null, currentRoom=null, micOn=true, cameraOn=true, sharing=false; const onlineIds=new Set();
+const introMotion=`motion-${Math.floor(Math.random()*6)+1}`;$('#authView')?.classList.add(introMotion);
 const api=async(url,options={})=>{const r=await fetch('/api'+url,{headers:{'Content-Type':'application/json',...(options.headers||{})},...options});const d=await r.json();if(!r.ok)throw Error(d.error||'Request failed.');return d};
 function toast(text){const e=$('#toast');e.textContent=text;e.classList.add('show');setTimeout(()=>e.classList.remove('show'),3500)}
 function initials(n){return (n||'?').split(' ').map(x=>x[0]).join('').slice(0,2).toUpperCase()}
