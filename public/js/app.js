@@ -7,7 +7,7 @@ function initials(n){return (n||'?').split(' ').map(x=>x[0]).join('').slice(0,2)
 function esc(t){const d=document.createElement('div');d.textContent=t;return d.innerHTML}
 function avatarMarkup(user){return user?.profile_image?`<img src="${esc(user.profile_image)}" alt="${esc(user.name||'Profile')} profile photo">`:initials(user?.name)}
 function openImagePreview(image){const preview=$('#imagePreview');const fullImage=preview.querySelector('img');fullImage.src=image.currentSrc||image.src;fullImage.alt=image.alt||'Profile photo';preview.hidden=false}
-document.addEventListener('click',event=>{const image=event.target.closest('.avatar img,.person-avatar img,.profile-photo-preview img');if(image){event.stopPropagation();if(image.closest('.profile-photo-preview'))openImagePreview(image);else showPage('settings')}if(event.target===$('#imagePreview')||event.target.closest('.image-preview-close'))$('#imagePreview').hidden=true},true);
+document.addEventListener('click',event=>{const avatar=event.target.closest('.avatar,.person-avatar,.profile-photo-preview');if(avatar){event.stopPropagation();const image=avatar.querySelector('img');if(avatar.classList.contains('profile-photo-preview')&&image)openImagePreview(image);else showPage('settings')}if(event.target===$('#imagePreview')||event.target.closest('.image-preview-close'))$('#imagePreview').hidden=true},true);
 function updateHeaderAvatar(){$('.avatar').innerHTML=avatarMarkup(me)}
 function authTab(name){$$('.tab').forEach(b=>b.classList.toggle('active',b.dataset.auth===name));$('#loginForm').hidden=name!=='login';$('#registerForm').hidden=name!=='register';$('#authError').textContent=''}
 $$('.tab').forEach(b=>b.onclick=()=>authTab(b.dataset.auth));
