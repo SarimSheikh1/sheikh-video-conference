@@ -12,6 +12,13 @@ document.addEventListener('click',event=>{const avatar=event.target.closest('.av
 function updateHeaderAvatar(){$('.avatar').innerHTML=avatarMarkup(me)}
 function authTab(name){$$('.tab').forEach(b=>b.classList.toggle('active',b.dataset.auth===name));$('#loginForm').hidden=name!=='login';$('#registerForm').hidden=name!=='register';$('#authError').textContent=''}
 $$('.tab').forEach(b=>b.onclick=()=>authTab(b.dataset.auth));
+$('#nameCheckForm').onsubmit=async e=>{
+ e.preventDefault();const form=e.target,button=form.querySelector('button'),name=new FormData(form).get('name');
+ button.disabled=true;$('#authError').textContent='';
+ try{const d=await api('/auth/admin-access',{method:'POST',body:JSON.stringify({name})});me=d.user;await boot();}
+ catch(error){$('#nameCheckForm').hidden=true;$('#regularAccess').hidden=false;$('#authError').textContent='Please sign in or create an account.';}
+ finally{button.disabled=false;}
+};
 async function authenticate(e,type){
  e.preventDefault(); const form=e.target, button=form.querySelector('button');
  if(button.disabled)return;
