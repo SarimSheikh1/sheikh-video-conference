@@ -1,310 +1,44 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Alert, FlatList, Image, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { NavigationContainer } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import { StatusBar } from 'expo-status-bar';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Image, KeyboardAvoidingView, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
-const Tab = createBottomTabNavigator();
-
-async function getDeviceId() {
-  const existing = await AsyncStorage.getItem('sheikh-device-id');
-  if (existing) return existing;
-  const next = `expo-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  await AsyncStorage.setItem('sheikh-device-id', next);
-  return next;
-}
+const API = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+const colors = { ink: '#111827', muted: '#6b7280', blue: '#4f46e5', pale: '#eef2ff', line: '#e5e7eb', bg: '#f8fafc', green: '#16a34a', red: '#dc2626' };
 
 async function api(path, options = {}) {
-  let response;
-  try {
-    response = await fetch(`${API_URL}${path}`, options);
-  } catch {
-    throw new Error(`Cannot reach API at ${API_URL}. Check that the backend is running and your phone is on the same Wi-Fi.`);
-  }
-  const text = await response.text();
-  let data = {};
-  try {
-    data = text ? JSON.parse(text) : {};
-  } catch {
-    data = { error: text };
-  }
-  if (!response.ok) throw new Error(data.error || `Request failed (${response.status}).`);
-  return data;
+  const res = await fetch(`${API}${path}`, { headers: { 'Content-Type': 'application/json', ...(options.headers || {}) }, ...options });
+  const text = await res.text(); let data = {}; try { data = text ? JSON.parse(text) : {}; } catch { data = { message: text }; }
+  if (!res.ok) throw new Error(data.message || `Request failed (${res.status})`); return data;
 }
 
-async function pickImage() {
-  const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (!permission.granted) {
-    Alert.alert('Permission needed', 'Allow photo access to attach images.');
-    return null;
-  }
-  const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.75 });
-  return result.canceled ? null : result.assets[0];
-}
-
-function Shell({ children, loading, refresh, error }) {
-  return (
-    <SafeAreaView style={styles.safe}>
-      <StatusBar style="dark" />
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.eyebrow}>Sheikh Expo Go</Text>
-          <Text style={styles.title}>Conference test console</Text>
-        </View>
-        <Pressable style={styles.iconButton} onPress={refresh}>
-          <Text style={styles.iconButtonText}>R</Text>
-        </Pressable>
-      </View>
-      {error ? <Text style={styles.errorBanner}>{error}</Text> : null}
-      {loading ? <ActivityIndicator style={styles.loader} size="large" color="#0f766e" /> : children}
-    </SafeAreaView>
-  );
-}
-
-function Attachment({ image, onPick, onClear }) {
-  return (
-    <View style={styles.attachmentRow}>
-      <Pressable style={styles.secondaryButton} onPress={onPick}>
-        <Text style={styles.secondaryButtonText}>{image ? 'Change image' : 'Add image'}</Text>
-      </Pressable>
-      {image ? (
-        <Pressable style={styles.clearButton} onPress={onClear}>
-          <Text style={styles.clearButtonText}>Clear</Text>
-        </Pressable>
-      ) : null}
-    </View>
-  );
-}
-
-function ChatScreen({ state, refresh, deviceId, error }) {
-  const [text, setText] = useState('');
-  const [image, setImage] = useState(null);
-  const [busy, setBusy] = useState(false);
-  const messages = state?.messages || [];
-
-  async function send() {
-    if (!text.trim() && !image) return;
-    setBusy(true);
-    try {
-      const body = new FormData();
-      body.append('deviceId', deviceId);
-      body.append('text', text);
-      if (image) body.append('image', { uri: image.uri, name: image.fileName || 'chat-image.jpg', type: image.mimeType || 'image/jpeg' });
-      await api('/api/mobile/messages', { method: 'POST', body });
-      setText('');
-      setImage(null);
-      await refresh();
-    } catch (error) {
-      Alert.alert('Message failed', error.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <Shell loading={false} refresh={refresh} error={error}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
-        <FlatList
-          data={messages}
-          keyExtractor={(item) => item._id}
-          contentContainerStyle={styles.list}
-          ListEmptyComponent={<Text style={styles.emptyText}>No messages yet. Pull refresh after the API connects.</Text>}
-          renderItem={({ item }) => (
-            <View style={styles.messageBubble}>
-              <Text style={styles.itemMeta}>{item.userName}</Text>
-              {item.text ? <Text style={styles.messageText}>{item.text}</Text> : null}
-              {item.imageUrl ? <Image source={{ uri: item.imageUrl }} style={styles.uploadedImage} /> : null}
-            </View>
-          )}
-        />
-        <View style={styles.composer}>
-          <TextInput value={text} onChangeText={setText} placeholder="Write chat message" style={styles.input} />
-          <Attachment image={image} onPick={async () => setImage(await pickImage())} onClear={() => setImage(null)} />
-          <Pressable style={[styles.primaryButton, busy && styles.disabled]} onPress={send} disabled={busy}>
-            <Text style={styles.primaryButtonText}>{busy ? 'Sending...' : 'Send message'}</Text>
-          </Pressable>
-        </View>
-      </KeyboardAvoidingView>
-    </Shell>
-  );
-}
-
-function LedgerScreen({ state, refresh, error }) {
-  const [form, setForm] = useState({ title: '', amount: '', category: 'Meeting', kind: 'debit' });
-  const [image, setImage] = useState(null);
-  const total = useMemo(() => Number(state?.totals?.ledger || 0), [state]);
-  const ledgers = state?.ledgers || [];
-
-  async function save() {
-    try {
-      const body = new FormData();
-      Object.entries(form).forEach(([key, value]) => body.append(key, value));
-      if (image) body.append('image', { uri: image.uri, name: image.fileName || 'ledger.jpg', type: image.mimeType || 'image/jpeg' });
-      await api('/api/mobile/ledgers', { method: 'POST', body });
-      setForm({ title: '', amount: '', category: 'Meeting', kind: 'debit' });
-      setImage(null);
-      await refresh();
-    } catch (error) {
-      Alert.alert('Ledger failed', error.message);
-    }
-  }
-
-  return (
-    <Shell loading={false} refresh={refresh} error={error}>
-      <ScrollView contentContainerStyle={styles.list}>
-        <View style={styles.totalPanel}>
-          <Text style={styles.itemMeta}>Ledger balance</Text>
-          <Text style={[styles.totalText, total < 0 && styles.negative]}>{total.toFixed(2)}</Text>
-        </View>
-        <View style={styles.card}>
-          <TextInput value={form.title} onChangeText={(title) => setForm({ ...form, title })} placeholder="Ledger title" style={styles.input} />
-          <TextInput value={form.amount} onChangeText={(amount) => setForm({ ...form, amount })} placeholder="Amount" keyboardType="decimal-pad" style={styles.input} />
-          <TextInput value={form.category} onChangeText={(category) => setForm({ ...form, category })} placeholder="Category" style={styles.input} />
-          <View style={styles.segment}>
-            {['debit', 'credit'].map((kind) => (
-              <Pressable key={kind} style={[styles.segmentOption, form.kind === kind && styles.segmentActive]} onPress={() => setForm({ ...form, kind })}>
-                <Text style={[styles.segmentText, form.kind === kind && styles.segmentTextActive]}>{kind}</Text>
-              </Pressable>
-            ))}
-          </View>
-          <Attachment image={image} onPick={async () => setImage(await pickImage())} onClear={() => setImage(null)} />
-          <Pressable style={styles.primaryButton} onPress={save}>
-            <Text style={styles.primaryButtonText}>Save ledger</Text>
-          </Pressable>
-        </View>
-        {ledgers.map((item) => (
-          <View key={item._id} style={styles.card}>
-            <Text style={styles.itemTitle}>{item.title}</Text>
-            <Text style={styles.itemMeta}>{item.category} / {item.kind}</Text>
-            <Text style={styles.amount}>{Number(item.amount).toFixed(2)}</Text>
-            {item.imageUrl ? <Image source={{ uri: item.imageUrl }} style={styles.uploadedImage} /> : null}
-          </View>
-        ))}
-      </ScrollView>
-    </Shell>
-  );
-}
-
-function UsageScreen({ state, refresh, error }) {
-  const [minutes, setMinutes] = useState('30');
-  const [dataMb, setDataMb] = useState('120');
-  const totals = state?.totals || {};
-  const usage = state?.usage || [];
-
-  async function addUsage() {
-    try {
-      await api('/api/mobile/usage', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ label: 'Expo Go test call', minutes, dataMb }),
-      });
-      await refresh();
-    } catch (error) {
-      Alert.alert('Usage failed', error.message);
-    }
-  }
-
-  return (
-    <Shell loading={false} refresh={refresh} error={error}>
-      <ScrollView contentContainerStyle={styles.list}>
-        <View style={styles.metrics}>
-          <View style={styles.metric}>
-            <Text style={styles.itemMeta}>Total minutes</Text>
-            <Text style={styles.metricValue}>{Number(totals.minutes || 0).toFixed(0)}</Text>
-          </View>
-          <View style={styles.metric}>
-            <Text style={styles.itemMeta}>Total data MB</Text>
-            <Text style={styles.metricValue}>{Number(totals.dataMb || 0).toFixed(0)}</Text>
-          </View>
-        </View>
-        <View style={styles.card}>
-          <TextInput value={minutes} onChangeText={setMinutes} placeholder="Minutes" keyboardType="number-pad" style={styles.input} />
-          <TextInput value={dataMb} onChangeText={setDataMb} placeholder="Data MB" keyboardType="number-pad" style={styles.input} />
-          <Pressable style={styles.primaryButton} onPress={addUsage}>
-            <Text style={styles.primaryButtonText}>Add usage</Text>
-          </Pressable>
-        </View>
-        {usage.map((item) => (
-          <View key={item._id} style={styles.card}>
-            <Text style={styles.itemTitle}>{item.label}</Text>
-            <Text style={styles.itemMeta}>{item.minutes} min / {item.dataMb} MB</Text>
-          </View>
-        ))}
-      </ScrollView>
-    </Shell>
-  );
-}
+function Avatar({ user, size = 48 }) { return user?.avatarUrl ? <Image source={{ uri: user.avatarUrl }} style={{ width: size, height: size, borderRadius: size / 2 }} /> : <View style={[styles.avatar, { width: size, height: size, borderRadius: size / 2 }]}><Text style={styles.avatarText}>{(user?.name || 'U').slice(0, 1).toUpperCase()}</Text></View>; }
+function Button({ title, onPress, secondary = false, small = false }) { return <TouchableOpacity onPress={onPress} style={[styles.button, secondary && styles.secondary, small && styles.smallButton]}><Text style={[styles.buttonText, secondary && styles.secondaryText]}>{title}</Text></TouchableOpacity>; }
 
 export default function App() {
-  const [deviceId, setDeviceId] = useState('');
-  const [state, setState] = useState(null);
-  const [error, setError] = useState('');
+  const [deviceId, setDeviceId] = useState(''); const [tab, setTab] = useState('Home'); const [loading, setLoading] = useState(true); const [error, setError] = useState('');
+  const [user, setUser] = useState(null); const [users, setUsers] = useState([]); const [messages, setMessages] = useState([]); const [meetings, setMeetings] = useState([]); const [draft, setDraft] = useState('');
+  const [name, setName] = useState(''); const [username, setUsername] = useState(''); const [bio, setBio] = useState(''); const [code, setCode] = useState(''); const [room, setRoom] = useState(null); const [callMode, setCallMode] = useState(''); const [mic, setMic] = useState(true); const [camera, setCamera] = useState(true);
 
-  const refresh = useCallback(async () => {
-    const id = deviceId || await getDeviceId();
-    if (!deviceId) setDeviceId(id);
-    const data = await api(`/api/mobile/bootstrap?deviceId=${encodeURIComponent(id)}&name=Sheikh Tester`);
-    setState(data);
-    setError('');
-  }, [deviceId]);
+  const refresh = async (id = deviceId) => { if (!id) return; try { setError(''); const d = await api(`/api/mobile/bootstrap?deviceId=${encodeURIComponent(id)}&name=Sheikh%20Tester`); setUser(d.user); setUsers(d.users || []); setMessages(d.messages || []); setMeetings(d.meetings || []); setName(d.user.name || ''); setUsername(d.user.username || ''); setBio(d.user.bio || ''); } catch (e) { setError(e.message); } finally { setLoading(false); } };
+  useEffect(() => { (async () => { let id = await AsyncStorage.getItem('deviceId'); if (!id) { id = `expo-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`; await AsyncStorage.setItem('deviceId', id); } setDeviceId(id); refresh(id); })(); }, []);
+  const doCall = (mode, target) => { setCallMode(mode); setRoom({ title: target ? `${mode === 'video' ? 'Video' : 'Voice'} call with ${target.name}` : 'New group meeting', code: target?.code || '' }); };
+  const createMeeting = async (mode = 'video') => { try { const d = await api('/api/mobile/meetings', { method: 'POST', body: JSON.stringify({ deviceId, title: 'Sheikh meeting' }) }); setRoom(d.meeting); setCallMode(mode); refresh(); } catch (e) { setError(e.message); } };
+  const joinMeeting = async () => { if (!code.trim()) return; try { const d = await api(`/api/mobile/meetings/${encodeURIComponent(code.trim())}/join`, { method: 'POST', body: JSON.stringify({ deviceId }) }); setRoom(d.meeting); setCallMode('video'); refresh(); } catch (e) { setError(e.message); } };
+  const saveProfile = async () => { try { const d = await api('/api/mobile/profile', { method: 'PUT', body: JSON.stringify({ deviceId, name, username, bio }) }); setUser(d.user); Alert.alert('Saved', 'Profile updated'); } catch (e) { setError(e.message); } };
+  const pickAvatar = async () => { const p = await ImagePicker.requestMediaLibraryPermissionsAsync(); if (!p.granted) return Alert.alert('Permission needed', 'Allow photo access to choose a profile picture.'); const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: .8 }); if (r.canceled) return; const f = r.assets[0]; const form = new FormData(); form.append('deviceId', deviceId); form.append('avatar', { uri: f.uri, name: 'avatar.jpg', type: 'image/jpeg' }); try { const d = await api('/api/mobile/profile/avatar', { method: 'POST', headers: {}, body: form }); setUser(d.user); } catch (e) { setError(e.message); } };
+  const addFriend = async id => { try { await api('/api/mobile/friends', { method: 'POST', body: JSON.stringify({ deviceId, friendId: id }) }); refresh(); } catch (e) { setError(e.message); } };
+  const send = async () => { if (!draft.trim()) return; try { await api('/api/mobile/messages', { method: 'POST', body: JSON.stringify({ deviceId, text: draft.trim(), roomCode: room?.code || 'general' }) }); setDraft(''); refresh(); } catch (e) { setError(e.message); } };
+  const friendIds = useMemo(() => new Set((user?.friends || []).map(String)), [user]);
 
-  useEffect(() => {
-    refresh().catch((error) => setError(`${error.message} Set EXPO_PUBLIC_API_URL to your backend LAN URL.`));
-  }, [refresh]);
-
-  return (
-    <NavigationContainer>
-      <Tab.Navigator screenOptions={{ headerShown: false, tabBarActiveTintColor: '#0f766e', tabBarStyle: styles.tabBar }}>
-        <Tab.Screen name="Chat">{() => <ChatScreen state={state} refresh={refresh} deviceId={deviceId} error={error} />}</Tab.Screen>
-        <Tab.Screen name="Ledgers">{() => <LedgerScreen state={state} refresh={refresh} error={error} />}</Tab.Screen>
-        <Tab.Screen name="Usage">{() => <UsageScreen state={state} refresh={refresh} error={error} />}</Tab.Screen>
-      </Tab.Navigator>
-    </NavigationContainer>
-  );
+  if (loading) return <SafeAreaView style={styles.center}><ActivityIndicator size="large" color={colors.blue} /><Text style={styles.muted}>Loading meeting app…</Text></SafeAreaView>;
+  const home = <ScrollView contentContainerStyle={styles.content}><View style={styles.hero}><View><Text style={styles.eyebrow}>SHEIKH MEET</Text><Text style={styles.title}>Meet, call and chat</Text><Text style={styles.muted}>Welcome back, {user?.name || 'there'}</Text></View><Avatar user={user} /></View>{error ? <Text style={styles.error}>{error}</Text> : null}<Text style={styles.section}>Start a meeting</Text><View style={styles.row}><TouchableOpacity style={[styles.callCard, { backgroundColor: '#4f46e5' }]} onPress={() => createMeeting('video')}><Text style={styles.cardIcon}>▣</Text><Text style={styles.cardTitle}>Video meeting</Text><Text style={styles.cardSub}>Camera and group room</Text></TouchableOpacity><TouchableOpacity style={[styles.callCard, { backgroundColor: '#0f766e' }]} onPress={() => createMeeting('voice')}><Text style={styles.cardIcon}>☎</Text><Text style={styles.cardTitle}>Voice call</Text><Text style={styles.cardSub}>Audio-only room</Text></TouchableOpacity></View><Text style={styles.section}>Join with code</Text><View style={styles.join}><TextInput value={code} onChangeText={setCode} placeholder="Enter meeting code" style={styles.input} autoCapitalize="characters" /><Button title="Join" onPress={joinMeeting} small /></View>{room ? <MeetingRoom /> : null}<Text style={styles.section}>Recent rooms</Text>{meetings.map(m => <TouchableOpacity key={m.code} style={styles.listRow} onPress={() => { setRoom(m); setCallMode('video'); }}><View><Text style={styles.bold}>{m.title || 'Meeting room'}</Text><Text style={styles.muted}>{m.code} · {m.participants?.length || 0} people</Text></View><Text style={styles.link}>Open</Text></TouchableOpacity>)}</ScrollView>;
+  function MeetingRoom() { return <View style={styles.room}><View style={styles.roomHead}><View><Text style={styles.roomTitle}>{room.title || 'Meeting room'}</Text><Text style={styles.roomCode}>Code: {room.code || 'local'}</Text></View><TouchableOpacity onPress={() => setRoom(null)}><Text style={styles.close}>×</Text></TouchableOpacity></View><View style={styles.tiles}><View style={styles.tile}><Avatar user={user} size={56} /><Text style={styles.tileText}>{user?.name || 'You'}</Text><Text style={styles.tileStatus}>{camera ? 'Camera on' : 'Camera off'}</Text></View><View style={styles.tile}><Text style={styles.tileEmoji}>＋</Text><Text style={styles.tileText}>Invite friends</Text></View></View><View style={styles.controls}><TouchableOpacity style={styles.control} onPress={() => setMic(!mic)}><Text>{mic ? '🎙' : '🔇'}</Text></TouchableOpacity><TouchableOpacity style={styles.control} onPress={() => setCamera(!camera)}><Text>{camera ? '📹' : '🚫'}</Text></TouchableOpacity><TouchableOpacity style={[styles.control, styles.end]} onPress={() => setRoom(null)}><Text>End</Text></TouchableOpacity></View></View>; }
+  const friends = <ScrollView contentContainerStyle={styles.content}><Text style={styles.title}>Friends</Text><Text style={styles.muted}>Connect with people in your meetings</Text>{users.filter(u => u._id !== user?._id).map(u => <View style={styles.listRow} key={u._id}><Avatar user={u} size={44} /><View style={{ flex: 1, marginLeft: 12 }}><Text style={styles.bold}>{u.name}</Text><Text style={styles.muted}>@{u.username || 'member'}</Text></View>{friendIds.has(String(u._id)) ? <Text style={styles.green}>Added</Text> : <Button title="Add" small onPress={() => addFriend(u._id)} />}</View>)}</ScrollView>;
+  const chat = <View style={styles.flex}><FlatList contentContainerStyle={styles.content} data={messages} keyExtractor={(m, i) => String(m._id || i)} renderItem={({ item }) => <View style={[styles.message, item.userId === deviceId && styles.myMessage]}><Text style={styles.messageName}>{item.userName}</Text><Text>{item.text}</Text></View>} ListEmptyComponent={<Text style={styles.muted}>No messages yet. Start the conversation.</Text>} /><View style={styles.composer}><TextInput value={draft} onChangeText={setDraft} placeholder="Write a message" style={[styles.input, { flex: 1 }]} /><Button title="Send" small onPress={send} /></View></View>;
+  const profile = <ScrollView contentContainerStyle={styles.content}><Text style={styles.title}>Your profile</Text><TouchableOpacity onPress={pickAvatar} style={styles.profileAvatar}><Avatar user={user} size={92} /><Text style={styles.link}>Change photo</Text></TouchableOpacity><Text style={styles.label}>Full name</Text><TextInput value={name} onChangeText={setName} style={styles.input} /><Text style={styles.label}>Username</Text><TextInput value={username} onChangeText={setUsername} style={styles.input} autoCapitalize="none" /><Text style={styles.label}>Bio</Text><TextInput value={bio} onChangeText={setBio} style={[styles.input, { height: 90 }]} multiline /><Button title="Save profile" onPress={saveProfile} /></ScrollView>;
+  return <SafeAreaView style={styles.safe}><StatusBar style="dark" />{tab === 'Home' ? home : tab === 'Friends' ? friends : tab === 'Chat' ? chat : profile}<View style={styles.tabs}>{['Home', 'Friends', 'Chat', 'Profile'].map(t => <TouchableOpacity key={t} onPress={() => setTab(t)} style={styles.tab}><Text style={[styles.tabText, tab === t && styles.activeTab]}>{t === 'Home' ? '⌂' : t === 'Friends' ? '♙' : t === 'Chat' ? '◌' : '☺'}</Text><Text style={[styles.tabLabel, tab === t && styles.activeLabel]}>{t}</Text></TouchableOpacity>)}</View></SafeAreaView>;
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#f7faf9' },
-  flex: { flex: 1 },
-  header: { padding: 18, paddingTop: 10, backgroundColor: '#ffffff', borderBottomColor: '#d8e4df', borderBottomWidth: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  eyebrow: { color: '#5f6f69', fontSize: 12, textTransform: 'uppercase', letterSpacing: 0 },
-  title: { color: '#13231f', fontSize: 22, fontWeight: '800', marginTop: 2 },
-  loader: { marginTop: 80 },
-  errorBanner: { margin: 12, color: '#9f1239', backgroundColor: '#ffe4e6', borderColor: '#fecdd3', borderWidth: 1, borderRadius: 8, padding: 10, fontWeight: '700' },
-  emptyText: { color: '#64746e', textAlign: 'center', padding: 24 },
-  list: { padding: 16, gap: 12 },
-  messageBubble: { backgroundColor: '#ffffff', borderColor: '#d8e4df', borderWidth: 1, borderRadius: 8, padding: 12 },
-  messageText: { color: '#13231f', fontSize: 16, marginTop: 4 },
-  itemMeta: { color: '#64746e', fontSize: 12, fontWeight: '600' },
-  itemTitle: { color: '#13231f', fontSize: 16, fontWeight: '800' },
-  uploadedImage: { width: '100%', height: 180, borderRadius: 8, marginTop: 10, backgroundColor: '#e8efec' },
-  composer: { padding: 12, gap: 10, borderTopColor: '#d8e4df', borderTopWidth: 1, backgroundColor: '#ffffff' },
-  input: { backgroundColor: '#ffffff', borderColor: '#c9d7d2', borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 11, fontSize: 15, color: '#13231f' },
-  primaryButton: { backgroundColor: '#0f766e', borderRadius: 8, paddingVertical: 13, alignItems: 'center' },
-  primaryButtonText: { color: '#ffffff', fontWeight: '800' },
-  secondaryButton: { borderColor: '#0f766e', borderWidth: 1, borderRadius: 8, paddingVertical: 11, paddingHorizontal: 12 },
-  secondaryButtonText: { color: '#0f766e', fontWeight: '800' },
-  clearButton: { paddingVertical: 11, paddingHorizontal: 12 },
-  clearButtonText: { color: '#9f1239', fontWeight: '800' },
-  attachmentRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  disabled: { opacity: 0.65 },
-  card: { backgroundColor: '#ffffff', borderColor: '#d8e4df', borderWidth: 1, borderRadius: 8, padding: 14, gap: 10 },
-  totalPanel: { backgroundColor: '#13231f', borderRadius: 8, padding: 16 },
-  totalText: { color: '#ffffff', fontSize: 34, fontWeight: '900', marginTop: 4 },
-  negative: { color: '#fecdd3' },
-  amount: { color: '#0f766e', fontSize: 24, fontWeight: '900' },
-  segment: { flexDirection: 'row', backgroundColor: '#e8efec', borderRadius: 8, padding: 4 },
-  segmentOption: { flex: 1, alignItems: 'center', paddingVertical: 9, borderRadius: 7 },
-  segmentActive: { backgroundColor: '#ffffff' },
-  segmentText: { color: '#64746e', fontWeight: '800', textTransform: 'capitalize' },
-  segmentTextActive: { color: '#0f766e' },
-  metrics: { flexDirection: 'row', gap: 12 },
-  metric: { flex: 1, backgroundColor: '#ffffff', borderColor: '#d8e4df', borderWidth: 1, borderRadius: 8, padding: 14 },
-  metricValue: { color: '#13231f', fontSize: 28, fontWeight: '900', marginTop: 6 },
-  iconButton: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: '#e8efec' },
-  iconButtonText: { color: '#0f766e', fontWeight: '900' },
-  tabBar: { borderTopColor: '#d8e4df' },
-});
+const styles = StyleSheet.create({ safe: { flex: 1, backgroundColor: colors.bg }, center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 }, flex: { flex: 1 }, content: { padding: 20, paddingBottom: 110 }, hero: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 22 }, eyebrow: { color: colors.blue, fontWeight: '800', letterSpacing: 2, fontSize: 12 }, title: { color: colors.ink, fontSize: 28, fontWeight: '800', marginTop: 5 }, section: { color: colors.ink, fontWeight: '800', fontSize: 18, marginTop: 22, marginBottom: 12 }, muted: { color: colors.muted, marginTop: 5 }, avatar: { backgroundColor: '#c7d2fe', alignItems: 'center', justifyContent: 'center' }, avatarText: { color: colors.blue, fontWeight: '800', fontSize: 20 }, row: { flexDirection: 'row', gap: 12 }, callCard: { flex: 1, borderRadius: 18, padding: 16, minHeight: 130 }, cardIcon: { color: '#fff', fontSize: 26 }, cardTitle: { color: '#fff', fontWeight: '800', fontSize: 16, marginTop: 18 }, cardSub: { color: '#e0e7ff', fontSize: 12, marginTop: 5 }, join: { flexDirection: 'row', gap: 8, alignItems: 'center' }, input: { borderWidth: 1, borderColor: colors.line, backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, color: colors.ink, marginBottom: 10 }, button: { backgroundColor: colors.blue, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 18, alignItems: 'center', marginTop: 8 }, smallButton: { paddingVertical: 10, paddingHorizontal: 14, marginTop: 0 }, buttonText: { color: '#fff', fontWeight: '800' }, secondary: { backgroundColor: colors.pale }, secondaryText: { color: colors.blue }, room: { backgroundColor: '#111827', borderRadius: 18, padding: 16, marginTop: 20 }, roomHead: { flexDirection: 'row', justifyContent: 'space-between' }, roomTitle: { color: '#fff', fontWeight: '800', fontSize: 17 }, roomCode: { color: '#c7d2fe', marginTop: 4 }, close: { color: '#fff', fontSize: 30 }, tiles: { flexDirection: 'row', gap: 10, marginTop: 18 }, tile: { backgroundColor: '#374151', borderRadius: 14, flex: 1, height: 125, alignItems: 'center', justifyContent: 'center' }, tileText: { color: '#fff', fontWeight: '700', marginTop: 5 }, tileStatus: { color: '#c7d2fe', fontSize: 11 }, tileEmoji: { color: '#fff', fontSize: 36 }, controls: { flexDirection: 'row', justifyContent: 'center', gap: 15, marginTop: 16 }, control: { backgroundColor: '#374151', borderRadius: 24, padding: 13, minWidth: 48, alignItems: 'center' }, end: { backgroundColor: '#dc2626', paddingHorizontal: 18 }, listRow: { backgroundColor: '#fff', borderRadius: 14, padding: 14, marginBottom: 10, flexDirection: 'row', alignItems: 'center', gap: 8 }, bold: { color: colors.ink, fontWeight: '800' }, link: { color: colors.blue, fontWeight: '800' }, green: { color: colors.green, fontWeight: '800' }, error: { color: colors.red, backgroundColor: '#fee2e2', padding: 12, borderRadius: 10, marginBottom: 8 }, message: { alignSelf: 'flex-start', backgroundColor: '#fff', borderRadius: 14, padding: 11, marginBottom: 8, maxWidth: '82%' }, myMessage: { alignSelf: 'flex-end', backgroundColor: '#e0e7ff' }, messageName: { color: colors.blue, fontSize: 11, fontWeight: '800', marginBottom: 3 }, composer: { flexDirection: 'row', gap: 8, padding: 12, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: colors.line }, profileAvatar: { alignItems: 'center', gap: 8, marginVertical: 20 }, label: { color: colors.ink, fontWeight: '700', marginTop: 10, marginBottom: 6 }, tabs: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 78, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: colors.line, flexDirection: 'row', justifyContent: 'space-around', paddingTop: 10 }, tab: { alignItems: 'center', width: '25%' }, tabText: { color: colors.muted, fontSize: 23 }, tabLabel: { color: colors.muted, fontSize: 11, marginTop: 3 }, activeTab: { color: colors.blue }, activeLabel: { color: colors.blue, fontWeight: '800' } });

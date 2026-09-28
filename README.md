@@ -9,7 +9,7 @@ Sheikh is a Node.js video, voice, and meeting application built with Express, So
 - Direct voice and video calling with accept/reject, real media permissions, mute, camera toggle, screen sharing, fullscreen, remote stream display, and WebRTC connection state
 - Small-group mesh meetings with room signaling, participant join/leave handling, real-time chat, meeting creation, generated codes, optional password and waiting-room data model
 - SQLite tables for users, meetings, calls, and messages; routes are separated from signaling and media code so the database or group-call topology can be upgraded later
-- Expo Go mobile test app in `mobile/` with chat, ledger entries, total usage tracking, image uploads, and MongoDB persistence through `/api/mobile/*`
+- Expo Go mobile test app in `mobile/` with video/voice meeting rooms, chat, friends, editable profiles, profile photos, and MongoDB persistence through `/api/mobile/*`
 
 ## Install and run
 
@@ -41,7 +41,7 @@ $env:EXPO_PUBLIC_API_URL="http://192.168.1.10:3000"
 npm start -- --tunnel
 ```
 
-Scan the QR code in Expo Go. The mobile client includes tabs for Chat, Ledgers, and Usage, plus JPG/PNG image upload from the phone photo library.
+Scan the QR code in Expo Go. The mobile client includes Home, Friends, Chat, and Profile tabs, meeting-code joining, group room controls, and profile photo selection.
 
 ### VS Code Live Server
 
@@ -86,4 +86,4 @@ Keep `.env` private, use a strong JWT secret, configure a precise `CORS_ORIGIN`,
 `POST /api/calls`, `POST /api/calls/:id/end`, `GET /api/calls/history/list`  
 `POST /api/meetings`, `GET /api/meetings/:code`, `POST /api/meetings/:code/join`  
 `GET /api/messages/:meetingId`, `POST /api/uploads`
-`GET /api/mobile/bootstrap`, `POST /api/mobile/messages`, `POST /api/mobile/ledgers`, `POST /api/mobile/usage`
+`GET /api/mobile/bootstrap`, `PUT /api/mobile/profile`, `POST /api/mobile/profile/avatar`, `POST /api/mobile/friends`, `POST /api/mobile/messages`, `POST /api/mobile/meetings`, `POST /api/mobile/meetings/:code/join`
