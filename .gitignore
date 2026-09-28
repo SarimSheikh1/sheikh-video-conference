@@ -4,3 +4,6 @@ work/
 database/*.db
 uploads/*
 !uploads/.gitkeep
+.mongo-data/
+expo-go-qr.png
+mobile/.expo/

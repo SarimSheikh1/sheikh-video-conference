@@ -9,6 +9,7 @@ Sheikh is a Node.js video, voice, and meeting application built with Express, So
 - Direct voice and video calling with accept/reject, real media permissions, mute, camera toggle, screen sharing, fullscreen, remote stream display, and WebRTC connection state
 - Small-group mesh meetings with room signaling, participant join/leave handling, real-time chat, meeting creation, generated codes, optional password and waiting-room data model
 - SQLite tables for users, meetings, calls, and messages; routes are separated from signaling and media code so the database or group-call topology can be upgraded later
+- Expo Go mobile test app in `mobile/` with chat, ledger entries, total usage tracking, image uploads, and MongoDB persistence through `/api/mobile/*`
 
 ## Install and run
 
@@ -22,6 +23,25 @@ npm run dev
 ```
 
 Open `http://localhost:3000`.
+
+## Expo Go mobile test
+
+1. Start MongoDB locally, or set `MONGODB_URI` to your MongoDB Atlas connection string.
+2. Start the API from the project root:
+
+```bash
+npm run dev
+```
+
+3. In a second terminal, start Expo from the mobile folder. Replace the IP address with your computer LAN IP so Expo Go on your phone can reach the API:
+
+```powershell
+cd mobile
+$env:EXPO_PUBLIC_API_URL="http://192.168.1.10:3000"
+npm start -- --tunnel
+```
+
+Scan the QR code in Expo Go. The mobile client includes tabs for Chat, Ledgers, and Usage, plus JPG/PNG image upload from the phone photo library.
 
 ### VS Code Live Server
 
@@ -66,3 +86,4 @@ Keep `.env` private, use a strong JWT secret, configure a precise `CORS_ORIGIN`,
 `POST /api/calls`, `POST /api/calls/:id/end`, `GET /api/calls/history/list`  
 `POST /api/meetings`, `GET /api/meetings/:code`, `POST /api/meetings/:code/join`  
 `GET /api/messages/:meetingId`, `POST /api/uploads`
+`GET /api/mobile/bootstrap`, `POST /api/mobile/messages`, `POST /api/mobile/ledgers`, `POST /api/mobile/usage`
